@@ -22,7 +22,7 @@ import torch
 
 
 class Config():
-    retrain = True
+    retrain = True  # Phase 1: Training with optimizations enabled
     tb_log = False
     device = torch.device("cuda:0")
 #     device = torch.device("cpu")
@@ -68,7 +68,7 @@ class Config():
     
     # Blur flags
     #===================================================
-    blur = True
+    blur = False  # Phase 1.1: Disabled for 30-40% speedup
     blur_learnable = False
     blur_loss_w = 1.0
     blur_n = 2
@@ -91,9 +91,13 @@ class Config():
     full_size = lat_size + lon_size + sog_size + cog_size
     n_embd = n_lat_embd + n_lon_embd + n_sog_embd + n_cog_embd
     # base GPT config, params common to all GPT versions
-    embd_pdrop = 0.1
-    resid_pdrop = 0.1
-    attn_pdrop = 0.1
+    embd_pdrop = 0.2  # Increased from 0.1 to reduce overfitting
+    resid_pdrop = 0.2  # Increased from 0.1 to reduce overfitting
+    attn_pdrop = 0.2  # Increased from 0.1 to reduce overfitting
+
+    # Early stopping
+    #===================================================
+    early_stopping_patience = 5  # Stop if validation loss doesn't improve for 5 epochs
     
     # optimization parameters
     #===================================================
@@ -105,7 +109,7 @@ class Config():
     lr_decay = True
     warmup_tokens = 512*20 # these two numbers come from the GPT-3 paper, but may not be good defaults elsewhere
     final_tokens = 260e9 # (at what point we reach 10% of original LR)
-    num_workers = 4 # for DataLoader
+    num_workers = 2  # Phase 1.4: Reduced from 4 to 2 for WSL (5-15% speedup)
     
     filename = f"{dataset_name}"\
         + f"-{mode}-{sample_mode}-{top_k}-{r_vicinity}"\
