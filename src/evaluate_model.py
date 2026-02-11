@@ -45,7 +45,14 @@ def evaluate_model(model_path, config, test_dataloader, device, init_seqlen=18):
 
     # Create model
     model = models.TrAISformer(config, partition_model=None)
-    model.load_state_dict(torch.load(model_path))
+
+    # Load state dict (handle torch.compile() wrapper if present)
+    state_dict = torch.load(model_path)
+    # Remove '_orig_mod.' prefix if present (from torch.compile)
+    if any(k.startswith('_orig_mod.') for k in state_dict.keys()):
+        state_dict = {k.replace('_orig_mod.', ''): v for k, v in state_dict.items()}
+
+    model.load_state_dict(state_dict)
     model = model.to(device)
     model.eval()
 

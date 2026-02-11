@@ -32,6 +32,8 @@ import torch.optim as optim
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data.dataloader import DataLoader
 from torch.nn import functional as F
+from torch.amp import autocast  # Phase 2.2: Mixed Precision Training (updated API)
+from torch.cuda.amp import GradScaler  # Phase 2.2: Mixed Precision Training
 import utils
 
 from trAISformer import TB_LOG
@@ -154,6 +156,10 @@ class Trainer:
         model, config, aisdls, INIT_SEQLEN, = self.model, self.config, self.aisdls, self.INIT_SEQLEN
         raw_model = model.module if hasattr(self.model, "module") else model
         optimizer = raw_model.configure_optimizers(config)
+
+        # Phase 2.2: Mixed Precision Training - GradScaler for automatic loss scaling
+        scaler = GradScaler()
+
         if model.mode in ("gridcont_gridsin", "gridcont_gridsigmoid", "gridcont2_gridsigmoid",):
             return_loss_tuple = True
         else:
@@ -163,9 +169,11 @@ class Trainer:
             is_train = split == 'Training'
             model.train(is_train)
             data = self.train_dataset if is_train else self.test_dataset
+            # Phase 2.3: Add persistent_workers for efficiency
             loader = DataLoader(data, shuffle=True, pin_memory=True,
                                 batch_size=config.batch_size,
-                                num_workers=config.num_workers)
+                                num_workers=config.num_workers,
+                                persistent_workers=True if config.num_workers > 0 else False)
 
             losses = []
             n_batches = len(loader)
@@ -178,15 +186,17 @@ class Trainer:
                 masks = masks[:, :-1].to(self.device)
 
                 # forward the model
+                # Phase 2.2: Mixed Precision Training - autocast for float16 forward pass
                 with torch.set_grad_enabled(is_train):
-                    if return_loss_tuple:
-                        logits, loss, loss_tuple = model(seqs,
-                                                         masks=masks,
-                                                         with_targets=True,
-                                                         return_loss_tuple=return_loss_tuple)
-                    else:
-                        logits, loss = model(seqs, masks=masks, with_targets=True)
-                    loss = loss.mean()  # collapse all losses if they are scattered on multiple gpus
+                    with autocast('cuda'):
+                        if return_loss_tuple:
+                            logits, loss, loss_tuple = model(seqs,
+                                                             masks=masks,
+                                                             with_targets=True,
+                                                             return_loss_tuple=return_loss_tuple)
+                        else:
+                            logits, loss = model(seqs, masks=masks, with_targets=True)
+                        loss = loss.mean()  # collapse all losses if they are scattered on multiple gpus
                     losses.append(loss.item())
 
                 d_loss += loss.item() * seqs.shape[0]
@@ -198,10 +208,13 @@ class Trainer:
                 if is_train:
 
                     # backprop and update the parameters
+                    # Phase 2.2: Mixed Precision Training - scaled backward pass and optimizer step
                     model.zero_grad()
-                    loss.backward()
+                    scaler.scale(loss).backward()
+                    scaler.unscale_(optimizer)  # Unscale gradients before clipping
                     torch.nn.utils.clip_grad_norm_(model.parameters(), config.grad_norm_clip)
-                    optimizer.step()
+                    scaler.step(optimizer)
+                    scaler.update()
 
                     # decay the learning rate based on our progress
                     if config.lr_decay:

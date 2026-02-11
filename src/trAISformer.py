@@ -55,6 +55,9 @@ if TB_LOG:
 utils.set_seed(42)
 torch.pi = torch.acos(torch.zeros(1)).item() * 2
 
+# Phase 2.2: Enable TensorFloat32 for better performance on Ampere+ GPUs
+torch.set_float32_matmul_precision('high')
+
 if __name__ == "__main__":
 
     device = cf.device
@@ -103,14 +106,21 @@ if __name__ == "__main__":
             shuffle = False
         else:
             shuffle = True
+        # Phase 2.3: Optimize DataLoader - add num_workers, pin_memory, persistent_workers
         aisdls[phase] = DataLoader(aisdatasets[phase],
                                    batch_size=cf.batch_size,
-                                   shuffle=shuffle)
+                                   shuffle=shuffle,
+                                   num_workers=cf.num_workers,
+                                   pin_memory=True,
+                                   persistent_workers=True if cf.num_workers > 0 else False)
     cf.final_tokens = 2 * len(aisdatasets["train"]) * cf.max_seqlen
 
     ## Model
     # ===============================
     model = models.TrAISformer(cf, partition_model=None)
+
+    # Phase 2.1: torch.compile() for automatic optimization (10-30% speedup)
+    model = torch.compile(model, mode='max-autotune')
 
     ## Trainer
     # ===============================

@@ -43,6 +43,7 @@ experiments/*/
 !experiments/.gitkeep
 comparisons/*/
 !comparisons/.gitkeep
+results/
 *.log
 
 # Data (keep structure, ignore content)

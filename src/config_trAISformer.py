@@ -91,9 +91,9 @@ class Config():
     full_size = lat_size + lon_size + sog_size + cog_size
     n_embd = n_lat_embd + n_lon_embd + n_sog_embd + n_cog_embd
     # base GPT config, params common to all GPT versions
-    embd_pdrop = 0.2  # Increased from 0.1 to reduce overfitting
-    resid_pdrop = 0.2  # Increased from 0.1 to reduce overfitting
-    attn_pdrop = 0.2  # Increased from 0.1 to reduce overfitting
+    embd_pdrop = 0.2  # Optimal value confirmed by Phase 2b experiment
+    resid_pdrop = 0.2  # Optimal value confirmed by Phase 2b experiment
+    attn_pdrop = 0.2  # Optimal value confirmed by Phase 2b experiment
 
     # Early stopping
     #===================================================
@@ -109,7 +109,7 @@ class Config():
     lr_decay = True
     warmup_tokens = 512*20 # these two numbers come from the GPT-3 paper, but may not be good defaults elsewhere
     final_tokens = 260e9 # (at what point we reach 10% of original LR)
-    num_workers = 2  # Phase 1.4: Reduced from 4 to 2 for WSL (5-15% speedup)
+    num_workers = 4  # Phase 2.3: Increased back to 4 (test with 8 too) - with faster GPU from Phase 2.1+2.2, data loading matters more
     
     filename = f"{dataset_name}"\
         + f"-{mode}-{sample_mode}-{top_k}-{r_vicinity}"\
